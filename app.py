@@ -1,97 +1,102 @@
 import streamlit as st
 import pandas as pd
+import requests
 
-# 🔗 API de Apify (REEMPLAZA con tu link)
+# 🔗 🔁 CAMBIA AQUÍ TU LINK DE APIFY
 url = "https://api.apify.com/v2/actor-tasks/ronaldoescobar.96~facebook-pages-scraper-task/runs?token=apify_api_zi0utLq19Lk36ng9rIzIejJjf0CkUQ3T6Csr"
 
-# Cargar datos automáticamente
-df = pd.read_csv(url)
+st.set_page_config(page_title="Dashboard Competencia", layout="wide")
 
-# 🧹 LIMPIEZA DE DATOS (adaptar según Apify output)
-# Renombrar columnas si es necesario
-df = df.rename(columns={
-    "pageName": "Marca",
-    "likes": "Reacciones",
-    "comments": "Comentarios",
-    "shares": "Shares",
-    "time": "Fecha",
-    "text": "Texto_post"
-})
+st.title("📊 Dashboard Automático - Competencia Facebook")
+st.subheader("Tiendas CENTRO vs Competencia")
 
-# Convertir fecha
-df["Fecha"] = pd.to_datetime(df["Fecha"], errors='coerce')
+# ✅ Cargar datos de forma segura
+@st.cache_data(ttl=3600)
+def cargar_datos(url):
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+        df = pd.DataFrame(data)
+        return df
+    except Exception as e:
+        return None
 
-# Agregar seguidores estimados (puedes mejorarlo después)
-df["Seguidores"] = 100000  # temporal
+df = cargar_datos(url)
 
-# Calcular engagement
+# ✅ Validación
+if df is None or df.empty:
+    st.error("⚠️ No se pudieron cargar los datos. Verifica el link de Apify.")
+    st.stop()
+
+# ✅ Ver columnas disponibles (solo para debug inicial)
+# st.write(df.columns)
+
+# ✅ Normalizar columnas (adaptado a Apify)
+df["Marca"] = df.get("pageName", "Desconocido")
+df["Texto_post"] = df.get("text", "")
+df["Fecha"] = pd.to_datetime(df.get("time", None), errors="coerce")
+
+df["Reacciones"] = df.get("likes", 0)
+df["Comentarios"] = df.get("comments", 0)
+df["Shares"] = df.get("shares", 0)
+
+# ✅ Limpiar datos
+df["Reacciones"] = pd.to_numeric(df["Reacciones"], errors="coerce").fillna(0)
+df["Comentarios"] = pd.to_numeric(df["Comentarios"], errors="coerce").fillna(0)
+df["Shares"] = pd.to_numeric(df["Shares"], errors="coerce").fillna(0)
+
+# ✅ Seguidores (temporal — luego lo puedes mejorar)
+df["Seguidores"] = 100000
+
+# ✅ Calcular engagement
 df["Engagement"] = (
     df["Reacciones"] + df["Comentarios"] + df["Shares"]
 ) / df["Seguidores"]
 
-# Clasificación automática de contenido
+# ✅ Clasificar tipo de contenido automáticamente
 def clasificar(texto):
-    if "oferta" in str(texto).lower() or "descuento" in str(texto).lower():
+    texto = str(texto).lower()
+    if "oferta" in texto or "descuento" in texto:
         return "Promo"
-    elif "nuevo" in str(texto).lower():
+    elif "nuevo" in texto:
         return "Producto"
     else:
         return "Branding"
 
 df["Tipo_post"] = df["Texto_post"].apply(clasificar)
 
-# Sidebar filtros
-st.sidebar.title("Filtros")
-marca = st.sidebar.multiselect(
-    "Marca", df["Marca"].dropna().unique(),
-    default=df["Marca"].dropna().unique()
-)
+# ✅ Filtros
+st.sidebar.header("🔎 Filtros")
 
-df_filtrado = df[df["Marca"].isin(marca)]
+marcas = df["Marca"].dropna().unique()
+marca_select = st.sidebar.multiselect("Marca", marcas, default=marcas)
 
-# Título
-st.title("📊 Dashboard Automático - Competencia Facebook")
-st.subheader("Tiendas CENTRO vs Competencia")
+df_filtrado = df[df["Marca"].isin(marca_select)]
 
-# KPIs
+# ✅ KPIs
 col1, col2, col3 = st.columns(3)
 
 col1.metric("Posts Analizados", len(df_filtrado))
-col2.metric("Engagement Promedio", f"{round(df_filtrado['Engagement'].mean()*100, 2)}%")
-col3.metric("Comentarios Totales", int(df_filtrado["Comentarios"].sum()))
+col2.metric(
+    "Engagement Promedio",
+    f"{round(df_filtrado['Engagement'].mean()*100, 2)}%"
+)
+col3.metric("Comentarios", int(df_filtrado["Comentarios"].sum()))
 
-# Frecuencia de posts
-st.subheader("📅 Frecuencia")
-posts = df_filtrado.groupby("Marca").size()
+# ✅ Frecuencia de posts
+st.subheader("📅 Frecuencia de Publicación")
+posts = df_filtrado.groupby("Marca").size().sort_values(ascending=False)
 st.bar_chart(posts)
 
-# Engagement
+# ✅ Engagement por marca
 st.subheader("💬 Engagement por Marca")
-eng = df_filtrado.groupby("Marca")["Engagement"].mean()
+eng = df_filtrado.groupby("Marca")["Engagement"].mean().sort_values(ascending=False)
 st.bar_chart(eng)
 
-# Top posts
+# ✅ Top posts
 st.subheader("🔥 Top Posts")
 top = df_filtrado.sort_values(by="Engagement", ascending=False).head(10)
-st.dataframe(top[["Marca", "Texto_post", "Reacciones", "Comentarios", "Engagement"]])
 
-# Tipo de contenido
-st.subheader("🧠 Tipo de contenido")
-tipo = df_filtrado.groupby("Tipo_post")["Engagement"].mean()
-st.bar_chart(tipo)
-
-# Comentarios insights (simple)
-st.subheader("🧾 Insights de comentarios")
-
-def sentimiento(c):
-    c = str(c).lower()
-    if "caro" in c or "malo" in c:
-        return "Negativo"
-    elif "bonito" in c or "oferta" in c:
-        return "Positivo"
-    return "Neutral"
-
-df["Sentimiento"] = df["Texto_post"].apply(sentimiento)
-
-sent = df["Sentimiento"].value_counts()
-st.bar_chart(sent)
+st.dataframe(
+    top[[
