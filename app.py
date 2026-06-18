@@ -3,7 +3,7 @@ import pandas as pd
 import requests
 
 # 🔗 ✅ CAMBIA AQUÍ TU DATASET DE APIFY (NO RUNS)
-url = "https://api.apify.com/v2/datasets/6Cjc0dWdidlUZlipL/items?format=json&clean=true"
+url = "https://api.apify.com/v2/datasets/6Cjc0dWdidlUZlipL/items?token=apify_api_zi0utLq19Lk36ng9rIzIejJjf0CkUQ3T6Csr&format=json&clean=true"
 
 st.set_page_config(page_title="Dashboard Competencia", layout="wide")
 
