@@ -181,4 +181,3 @@ st.bar_chart(sent)
 st.subheader("📋 Datos completos")
 
 st.dataframe(df_filtrado)
-``
